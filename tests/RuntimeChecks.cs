@@ -1,4 +1,4 @@
-using AlwaysSpecial;
+using AnyPlaceAnyTime;
 using BepInEx;
 using BepInEx.Unity.IL2CPP;
 using Comfort.Common;
@@ -8,9 +8,9 @@ using EFT.Quests;
 using HarmonyLib;
 using Il2CppInterop.Runtime;
 using UnityEngine;
-namespace AlwaysSpecialChecks;
-[BepInPlugin("com.jpeckham.alwaysspecial.checks","AlwaysSpecial Runtime Checks","1.0.0")]
-[BepInDependency("com.jpeckham.alwaysspecial","0.1.0")]
+namespace AnyPlaceAnyTimeChecks;
+[BepInPlugin("com.jpeckham.alwaysspecial.checks","AnyPlaceAnyTime Runtime Checks","1.0.0")]
+[BepInDependency("com.jpeckham.alwaysspecial","0.2.0")]
 public sealed class RuntimeChecks : BasePlugin
 {
     internal static RuntimeChecks Instance=null!;
@@ -24,14 +24,15 @@ public sealed class RuntimeChecks : BasePlugin
         if(ran || DateTime.UtcNow<ready) return;
         if(!Singleton<ItemFactory>.Instantiated && DateTime.UtcNow<deadline) return;
         ran=true;
-        var config=AlwaysSpecial.Plugin.Instance.Config;
+        var config=AnyPlaceAnyTime.Plugin.Instance.Config;
         var save=config.SaveOnConfigSet;
         var originalCamera=Settings.Camera.Value;var originalMarker=Settings.Marker.Value;var originalJammer=Settings.Jammer.Value;
         config.SaveOnConfigSet=false;
         try {
             Settings.Camera.Value=Settings.Marker.Value=Settings.Jammer.Value=true;
             Check(Singleton<ItemFactory>.Instantiated,"Item templates never initialized");
-            foreach(var template in PlacementPolicy.Templates) {
+            foreach(var entry in PlacementCatalog.Entries) {
+                var template=entry.Id;
                 var item=VirtualDevices.Get(template);
                 Check(item.StringTemplateId==template && item.CurrentAddress==null && VirtualDevices.IsVirtual(item),"Native virtual device creation");
                 var actual=Singleton<ItemFactory>.Instance.CreateItem(Guid.NewGuid().ToString("N")[..24],template,null);
@@ -39,8 +40,17 @@ public sealed class RuntimeChecks : BasePlugin
                 var condition=new ConditionZone { target=new[]{template} };
                 var predicate=new InteractionContextHelper.__c__DisplayClass8_1 { conditionZone=condition };
                 Check(predicate.Method_Internal_Boolean_Item_PDM_0(item),"Native placement predicate rejects virtual device");
-                condition.target=new[]{"590c2e1186f77425357b6124"};
+                condition.target=new[]{"591092ef86f7747bb8703422"};
                 Check(!predicate.Method_Internal_Boolean_Item_PDM_0(item),"Unrelated quest must not match");
+            }
+            foreach(var template in PlacementCatalog.ExcludedTaskItemIds) {
+                Check(!VirtualDevices.CanSupply(template),"Task-storage item must never be offered");
+                bool rejected=false;
+                try { VirtualDevices.Get(template); } catch(InvalidOperationException) { rejected=true; }
+                Check(rejected,"Task-storage construction must fail closed");
+                var real=Singleton<ItemFactory>.Instance.CreateItem(Guid.NewGuid().ToString("N")[..24],template,null);
+                Check(real.QuestItem && !VirtualDevices.IsVirtual(real),"Real task-storage placement must use original consumption");
+                Check(CameraCompletionPatch.Prefix(new InteractionContextHelper.__c__DisplayClass8_0 { resultItem=real },true),"Task-storage completion must pass through to native require/consume path");
             }
             // Identity-only native instances: no constructor/profile/raid mutation.
             var inventory=new Inventory(IL2CPP.il2cpp_object_new(Il2CppClassPointerStore<Inventory>.NativeClassPtr));
@@ -57,15 +67,35 @@ public sealed class RuntimeChecks : BasePlugin
                 foreach(var template in PlacementPolicy.Templates) Check(supplied.Contains(template)==Settings.Enabled(template),"Configuration toggle did not control native availability");
             }
             VirtualDevices.InventoryScope=null;
+            VirtualDevices.InventoryScope=inventory;
+            var extra=Settings.Additional["590c2e1186f77425357b6124"];
+            var originalExtra=extra.Value;
+            try {
+                var book=ZoneFixture.Create();
+                extra.Value=true;
+                var zoneTargets=AvailabilityScopePatch.TargetsForZone(book,"anyplace-test-zone");
+                Check(zoneTargets.Contains("590c2e1186f77425357b6124") && zoneTargets.Contains("63a0b2eabea67a6d93009e52") && zoneTargets.Length==2,"Native quest-zone discovery includes ordinary items and excludes task storage");
+                Check(AvailabilityScopePatch.TargetsForZone(book,"unrelated-zone").Length==0,"Wrong zone must not supply items");
+                extra.Value=false;
+                Check(!AvailabilityScopePatch.TargetsForZone(book,"anyplace-test-zone").Contains("590c2e1186f77425357b6124"),"Zone discovery respects extra toggle");
+                VirtualDevices.TargetScope=new[]{"590c2e1186f77425357b6124","591092ef86f7747bb8703422"};
+                extra.Value=true;
+                var selected=new List<Item>();foreach(var item in inventory.GetPlayerItems((EPlayerItems)6)) selected.Add(item);
+                Check(selected.Count==1 && selected[0].StringTemplateId=="590c2e1186f77425357b6124","Only ordinary zone target injected");
+                extra.Value=false;
+                count=0;foreach(var item in inventory.GetPlayerItems((EPlayerItems)6)) count++;
+                Check(count==0,"Additional per-item toggle disabled");
+            } finally { extra.Value=originalExtra;VirtualDevices.TargetScope=null;VirtualDevices.InventoryScope=null; }
             var resources=new Il2CppSystem.Collections.Generic.List<ResourceKey>().Cast<Il2CppSystem.Collections.Generic.IEnumerable<ResourceKey>>();
             ResourcePatch.Postfix(ref resources);
             var paths=new HashSet<string>();foreach(var resource in resources) paths.Add(resource.path);
-            foreach(var template in PlacementPolicy.Templates) Check(paths.Contains(VirtualDevices.Get(template).Prefab.path),"Missing virtual device prefab in resource load list");
+            foreach(var entry in PlacementCatalog.Entries.Where(entry=>entry.NeedsPrefab)) Check(paths.Contains(VirtualDevices.Get(entry.Id).Prefab.path),"Missing virtual device prefab in resource load list");
             Check(Harmony.GetAllPatchedMethods().Count(m=>Harmony.GetPatchInfo(m)?.Owners.Contains("com.jpeckham.alwaysspecial")==true)==5,"Expected five native hooks");
-            Log.LogInfo("PASS: three native devices, placement predicates, real-item exclusion, scoped empty-inventory availability, all eight config combinations, inventory isolation, prefab inclusion and five patched targets");
+            Log.LogInfo($"PASS: {PlacementCatalog.Entries.Length} native placement items/predicates, {PlacementCatalog.ExcludedTaskItemIds.Length} protected task items rejected, zone-target filtering, additional toggle, original toggle combinations, inventory isolation, beacon prefabs and five hooks");
         } catch(Exception error) { Log.LogError("FAIL: "+error); }
         finally {
             VirtualDevices.InventoryScope=null;
+            VirtualDevices.TargetScope=null;
             Settings.Camera.Value=originalCamera;Settings.Marker.Value=originalMarker;Settings.Jammer.Value=originalJammer;
             config.SaveOnConfigSet=save;
         }

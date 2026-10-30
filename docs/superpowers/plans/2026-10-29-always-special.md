@@ -1,4 +1,4 @@
-# AlwaysSpecial Implementation Plan
+# AnyPlaceAnyTime Implementation Plan
 
 **Goal:** Place cameras, MS2000 markers and signal jammers without packing them on local SPT 5 / EFT 48484.
 

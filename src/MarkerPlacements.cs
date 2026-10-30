@@ -2,7 +2,7 @@ using Comfort.Common;
 using EFT;
 using EFT.InventoryLogic;
 using UnityEngine;
-namespace AlwaysSpecial;
+namespace AnyPlaceAnyTime;
 internal static class MarkerPlacements
 {
     private sealed record Pending(Player Player,Item Item,string Zone);

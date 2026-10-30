@@ -10,9 +10,9 @@ if(args.Contains("--callers")) {
 }
 foreach(var type in Types(assembly.MainModule.Types).Where(t=>Regex.IsMatch(t.FullName,args[1],RegexOptions.IgnoreCase))) {
  if(!type.Methods.Any(m=>Regex.IsMatch(m.Name,args[2],RegexOptions.IgnoreCase))) continue;
- Console.WriteLine("TYPE "+type.FullName);
+ Console.WriteLine("TYPE "+type.FullName+" : "+type.BaseType?.FullName);
  foreach(var method in type.Methods.Where(m=>Regex.IsMatch(m.Name,args[2],RegexOptions.IgnoreCase))) {
-  Console.WriteLine(method.FullName);
+  Console.WriteLine(method.FullName+(method.HasGenericParameters ? " [generic: "+string.Join(",",method.GenericParameters.Select(p=>p.Name))+"]" : ""));
   if(args.Contains("--il") && method.HasBody) foreach(var instruction in method.Body.Instructions) Console.WriteLine("  "+instruction);
  }
 }

@@ -1,8 +1,14 @@
-namespace AlwaysSpecial;
+namespace AnyPlaceAnyTime;
 internal static class PlacementPolicy
 {
     public static readonly string[] Templates = ["5991b51486f77447b112d44f", "5b4391a586f7745321235ab2", "5ac78a9b86f7741cca0bbd8d"];
-    public static bool IsSupported(string? template) => template != null && Array.IndexOf(Templates, template) >= 0;
+    public static bool IsSupported(string? template) => template != null && PlacementCatalog.ById.ContainsKey(template);
+    public static bool CanSupply(string template,bool? questItem,bool enabled) => IsSupported(template) && questItem==false && enabled;
+    internal static string ConfigKey(PlacementTemplate entry)
+    {
+        char[] invalid = ['=', '\n', '\t', '\\', '"', '\'', '[', ']'];
+        return string.Concat(entry.Name.Select(c=>Array.IndexOf(invalid,c)>=0 ? ' ' : c)).Trim()+" ("+entry.Id[^8..]+")";
+    }
     public static bool IsEnabled(string? template,bool camera,bool marker,bool jammer) => template switch {
         "5b4391a586f7745321235ab2" => camera,
         "5991b51486f77447b112d44f" => marker,

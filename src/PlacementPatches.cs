@@ -2,26 +2,44 @@ using Comfort.Common;
 using EFT;
 using EFT.Interactive;
 using EFT.InventoryLogic;
+using EFT.Quests;
 using HarmonyLib;
 using System.Reflection;
 using UnityEngine;
-namespace AlwaysSpecial;
+namespace AnyPlaceAnyTime;
 [HarmonyPatch]
 internal static class AvailabilityScopePatch
 {
+    internal readonly record struct Scope(Inventory? Inventory,string[]? Targets);
     static MethodBase TargetMethod() => AccessTools.Method(typeof(InteractionContextHelper),nameof(InteractionContextHelper.GetAvailableActions),[typeof(GamePlayerOwner),typeof(PlaceItemTrigger)]);
-    static void Prefix(GamePlayerOwner __0,ref Inventory? __state)
+    static void Prefix(GamePlayerOwner __0,PlaceItemTrigger __1,ref Scope __state)
     {
-        __state=VirtualDevices.InventoryScope;
+        __state=new(VirtualDevices.InventoryScope,VirtualDevices.TargetScope);
         VirtualDevices.InventoryScope=null;
+        VirtualDevices.TargetScope=null;
         var player=__0?.Player;
         var world=Singleton<GameWorld>.Instance;
-        if(player!=null && player.IsYourPlayer && world!=null && world.MainPlayer?.Pointer==player.Pointer && world.TryCast<HideoutGameWorld>()==null)
+        if(player!=null && player.IsYourPlayer && world!=null && world.MainPlayer?.Pointer==player.Pointer && world.TryCast<HideoutGameWorld>()==null && __1!=null) {
+            VirtualDevices.TargetScope=TargetsForZone(player.QuestController.Quests,__1.Id);
             VirtualDevices.InventoryScope=player.Profile.Inventory;
+        }
     }
-    static Exception? Finalizer(Exception? __exception,Inventory? __state)
+    internal static string[] TargetsForZone(QuestBook quests,string zoneId)
     {
-        VirtualDevices.InventoryScope=__state;
+            var targets=new HashSet<string>();
+            foreach(var handler in quests.GetConditionHandlersByZone<ConditionZone>(zoneId)) {
+                var condition=handler.Condition;
+                if(condition==null || handler.CurrentValue>=condition.value) continue;
+                if(condition.TryCast<ConditionLeaveItemAtLocation>()==null && condition.TryCast<ConditionPlaceBeacon>()==null) continue;
+                var zone=condition.Cast<ConditionZone>();
+                if(zone.target!=null) foreach(var template in zone.target) if(VirtualDevices.CanSupply(template)) targets.Add(template);
+            }
+            return targets.ToArray();
+    }
+    static Exception? Finalizer(Exception? __exception,Scope __state)
+    {
+        VirtualDevices.InventoryScope=__state.Inventory;
+        VirtualDevices.TargetScope=__state.Targets;
         return __exception;
     }
 }
@@ -39,8 +57,8 @@ internal static class ResourcePatch
         var resources=new Il2CppSystem.Collections.Generic.List<ResourceKey>();
         var paths=new HashSet<string>();
         foreach(var resource in __result) if(paths.Add(resource.path)) resources.Add(resource);
-        foreach(var template in PlacementPolicy.Templates)
-            foreach(var resource in VirtualDevices.Get(template).Template.AllResources)
+        foreach(var entry in PlacementCatalog.Entries.Where(entry=>entry.NeedsPrefab && VirtualDevices.IsOrdinaryTemplate(entry.Id)))
+            foreach(var resource in VirtualDevices.Get(entry.Id).Template.AllResources)
                 if(resource!=null && !string.IsNullOrEmpty(resource.path) && paths.Add(resource.path)) resources.Add(resource);
         __result=resources.Cast<Il2CppSystem.Collections.Generic.IEnumerable<ResourceKey>>();
     }
@@ -48,7 +66,7 @@ internal static class ResourcePatch
 [HarmonyPatch(typeof(InteractionContextHelper.__c__DisplayClass8_0),"_GetAvailableActions_b__2")]
 internal static class CameraCompletionPatch
 {
-    static bool Prefix(InteractionContextHelper.__c__DisplayClass8_0 __instance,bool __0)
+    internal static bool Prefix(InteractionContextHelper.__c__DisplayClass8_0 __instance,bool __0)
     {
         if(!VirtualDevices.IsVirtual(__instance.resultItem)) return true;
         var owner=__instance.owner;

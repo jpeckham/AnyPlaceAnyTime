@@ -3,9 +3,9 @@ using BepInEx.Unity.IL2CPP;
 using HarmonyLib;
 using UnityEngine;
 using System.Runtime.CompilerServices;
-[assembly: InternalsVisibleTo("AlwaysSpecial.RuntimeChecks")]
-namespace AlwaysSpecial;
-[BepInPlugin("com.jpeckham.alwaysspecial", "AlwaysSpecial", "0.1.0")]
+[assembly: InternalsVisibleTo("AnyPlaceAnyTime.RuntimeChecks")]
+namespace AnyPlaceAnyTime;
+[BepInPlugin("com.jpeckham.alwaysspecial", "AnyPlaceAnyTime", "0.2.0")]
 [BepInDependency("com.sptushonka.core", "5.0.0")]
 public sealed class Plugin : BasePlugin
 {
@@ -19,12 +19,12 @@ public sealed class Plugin : BasePlugin
         Settings.Bind(Config);
         Config.SettingChanged+=OnSettingChanged;
         if(IL2CPPChainloader.Instance.Plugins.ContainsKey("com.fika.core")) {
-            Log.LogError("AlwaysSpecial 0.1.0 supports standalone SPT only; patches not applied.");return;
+            Log.LogError("AnyPlaceAnyTime supports standalone SPT only; patches not applied.");return;
         }
         harmony=new Harmony("com.jpeckham.alwaysspecial");
         try { harmony.PatchAll(typeof(Plugin).Assembly);pump=AddComponent<MarkerPump>(); }
         catch { harmony.UnpatchSelf(); throw; }
-        Log.LogInfo("AlwaysSpecial ready: virtual camera, MS2000 marker and signal jammer; normal quest rules/timers retained.");
+        Log.LogInfo($"AnyPlaceAnyTime ready: {PlacementCatalog.Entries.Length} placement templates with independent toggles; task-storage items excluded.");
     }
     public override bool Unload()
     {

@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
- <PropertyGroup><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><AssemblyName>AlwaysSpecial.RuntimeChecks</AssemblyName><EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+ <PropertyGroup><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><AssemblyName>AnyPlaceAnyTime.RuntimeChecks</AssemblyName><EnableDefaultCompileItems>false</EnableDefaultCompileItems>
  <SPTPath Condition="'$(SPTPath)' == ''">C:\sptarkov\SPTarkov 5.0.0-BE-1.3.0.0.48484</SPTPath></PropertyGroup>
- <ItemGroup><Compile Include="RuntimeChecks.cs"/>
+ <ItemGroup><Compile Include="RuntimeChecks.cs"/><Compile Include="ZoneFixture.cs"/>
  <Reference Include="BepInEx.Core;BepInEx.Unity.IL2CPP;Il2CppInterop.Runtime;Il2CppInterop.Common;0Harmony"><HintPath>$(SPTPath)/BepInEx/core/%(Identity).dll</HintPath><Private>false</Private></Reference>
  <Reference Include="$(SPTPath)/BepInEx/interop/*.dll"><Private>false</Private></Reference>
- <Reference Include="AlwaysSpecial"><HintPath>../bin/Release/net10.0/AlwaysSpecial.dll</HintPath><Private>false</Private></Reference>
+ <Reference Include="AnyPlaceAnyTime"><HintPath>../bin/Release/net10.0/AnyPlaceAnyTime.dll</HintPath><Private>false</Private></Reference>
  </ItemGroup>
 </Project>
